@@ -1,3 +1,37 @@
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {
+# META     "lakehouse": {
+# META       "default_lakehouse_name": "AvantisSourceSilver",
+# META       "known_lakehouses": [
+# META         {"id": "d04b2b50-92dd-41e9-80c6-e04068075313"},
+# META         {"id": "adfbc86c-1b58-4463-918e-6cce10ada007"}
+# META       ]
+# META     }
+# META   }
+# META }
+
+# MARKDOWN ********************
+
+# # Silver_Transform_Procurement
+# 
+# Builds the procurement / inventory-catalog silver layer for the supply-chain team.
+# Sourced from `AvantisSourceBronze.mc`; written to `AvantisSourceSilver`.
+# 
+# **Source tables** (verified present in bronze on 2026-05-07):
+# `mc.POSUM`, `mc.POLINE`, `mc.PCITEM`, `mc.VENDOR`, `mc.VENDORPART`, `mc.MANUFACTURE`
+# 
+# **Output silver tables**:
+# `dim_vendor`, `dim_manufacturer`, `dim_item`, `dim_vendor_part`, `fact_po_header`, `fact_po_line`
+
+# CELL ********************
+
 from pyspark.sql import functions as F
 from pyspark.sql.functions import col, lit
 
@@ -12,6 +46,15 @@ def write_silver(df, table_name):
        .mode("overwrite")
        .option("overwriteSchema", "true")
        .saveAsTable(target))
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
 
 # 1. dim_vendor
 vendor = spark.table(f"{BRONZE}.mc.VENDOR")
@@ -33,6 +76,15 @@ dim_vendor = (vendor
     .dropDuplicates(["vendor_key"]))
 write_silver(dim_vendor, "dim_vendor")
 
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
 # 2. dim_manufacturer
 mfg = spark.table(f"{BRONZE}.mc.MANUFACTURE")
 dim_manufacturer = (mfg
@@ -49,6 +101,15 @@ dim_manufacturer = (mfg
     )
     .dropDuplicates(["manufacturer_key"]))
 write_silver(dim_manufacturer, "dim_manufacturer")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
 
 # 3. dim_item (catalog grain - PCITEM)
 pcitem = spark.table(f"{BRONZE}.mc.PCITEM")
@@ -77,7 +138,16 @@ dim_item = (pcitem
     .dropDuplicates(["item_key"]))
 write_silver(dim_item, "dim_item")
 
-# 4. dim_vendor_part
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# 4. dim_vendor_part (PCItem x Vendor - carries MFG PN + Vendor PN)
 vendorpart = spark.table(f"{BRONZE}.mc.VENDORPART")
 dim_vendor_part = (vendorpart
     .select(
@@ -106,7 +176,16 @@ dim_vendor_part = (vendorpart
     .dropDuplicates(["vendor_part_key"]))
 write_silver(dim_vendor_part, "dim_vendor_part")
 
-# 5. fact_po_header
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# 5. fact_po_header (1 row per PO - all sites, all history)
 posum = spark.table(f"{BRONZE}.mc.POSUM")
 fact_po_header = (posum
     .select(
@@ -148,7 +227,16 @@ fact_po_header = (posum
     .dropDuplicates(["po_key"]))
 write_silver(fact_po_header, "fact_po_header")
 
-# 6. fact_po_line
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# 6. fact_po_line (1 row per PO line - what was ordered)
 poline = spark.table(f"{BRONZE}.mc.POLINE")
 fact_po_line = (poline
     .select(
@@ -188,8 +276,24 @@ fact_po_line = (poline
     .dropDuplicates(["po_line_key"]))
 write_silver(fact_po_line, "fact_po_line")
 
-# Smoke check
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# Smoke check - print row counts for each output
 for t in ["dim_vendor", "dim_manufacturer", "dim_item", "dim_vendor_part",
           "fact_po_header", "fact_po_line"]:
     n = spark.table(f"{SILVER}.{t}").count()
     print(f"{t:<22}  {n:>10,}")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
